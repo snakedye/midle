@@ -74,8 +74,9 @@ fn main() {
                     configuration.push(Config::new());
                 }
                 "-h" => { 
-                    print!("Usage: midle [option]")
-                    print!("    -c [timeout] [command] [seat_name] : the timeout is in millisecond")
+                    print!("Usage: midle [option]\n\n");
+                    println!("    -c [timeout] [command] [seat_name] : the timeout is in millisecond");
+                    std::process::exit(0);
                 }
                 _ => if collect {
                     if !fields.0 {
