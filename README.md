@@ -9,6 +9,6 @@ This is an alternative to swayidle.
 
 ```shell
 git clone https://gitlab.com/snakedye/midle.git
-cd idle
+cd midle
 cargo build --release
 ```
