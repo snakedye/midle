@@ -28,7 +28,7 @@ impl Config {
             timeout: 1 << 31
         } }
     }
-    pub fn filter(self, seat: &Main<WlSeat>, idle_manager: &Main<OrgKdeKwinIdle>) {
+    pub fn filter(&self, seat: &Main<WlSeat>, idle_manager: &Main<OrgKdeKwinIdle>) {
         let idle_timeout = idle_manager
             .get_idle_timeout(seat, self.timeout);
         let mut command = if let Some(command) = &self.command {
@@ -122,7 +122,7 @@ fn main() {
     for seat in globals.seats {
         let configuration = configuration.clone();
         seat.quick_assign(move |seat, event, mut idle_manager| match event {
-            wl_seat::Event::Name{ name } => for config in configuration.clone() {
+            wl_seat::Event::Name{ name } => for config in &configuration {
                 if {
                 match config.name.as_ref() {
                     Some(seat_name) => name.eq(seat_name),
