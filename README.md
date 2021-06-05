@@ -2,6 +2,10 @@
 
 This is an alternative to swayidle.
 
+### Features
+- multiseat support
+- works
+
 ### Dependencies
 - rust
 

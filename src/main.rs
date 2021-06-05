@@ -68,20 +68,20 @@ fn main() {
         let len = configuration.len();
         match args.next() {
             Some(flag) => match flag.as_str() {
-                "-c" => { 
+                "-c" | "--command" => { 
                     collect = true;
                     fields = (false, false, false); 
                     configuration.push(Config::new());
                 }
                 "-h" => { 
                     print!("Usage: midle [option]\n\n");
-                    println!("    -c [timeout] [command] [seat_name] : the timeout is in millisecond");
+                    println!("    -c [timeout] [command] [seat_name] : the timeout is in second");
                     std::process::exit(0);
                 }
                 _ => if collect {
                     if !fields.0 {
                         fields.0 = true;
-                        configuration[len-1].timeout = flag.parse().unwrap()
+                        configuration[len-1].timeout = flag.parse::<u32>().unwrap() * 1000;
                     } else if !fields.1 {
                         fields.1 = true;
                         configuration[len-1].command = Some(flag);
@@ -153,6 +153,5 @@ fn main() {
                 .unwrap();
         }
     }
-
 }
 
