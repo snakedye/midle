@@ -31,18 +31,15 @@ impl Config {
     pub fn filter(&self, seat: &Main<WlSeat>, idle_manager: &Main<OrgKdeKwinIdle>) {
         let idle_timeout = idle_manager
             .get_idle_timeout(seat, self.timeout);
-        let mut command = if let Some(command) = &self.command {
+        if let Some(command) = &self.command {
             let mut string = command.split_whitespace();
             let mut command = Command::new(string.next().unwrap());
             command.args(string.collect::<Vec<&str>>());
-            Some(command)
-        } else { None };
-        idle_timeout.quick_assign(move |_, event, _| match event {
-            Event::Idle => if let Some(command) = &mut command {
-                command.spawn().expect("Error");
-            }
-            Event::Resumed => {}
-        });
+            idle_timeout.quick_assign(move |_, event, _| match event {
+                Event::Idle => { command.spawn().expect("Error"); }
+                Event::Resumed => {}
+            });
+        } else { idle_timeout.quick_assign(move |_, _, _| {}) };
     }
 }
 
