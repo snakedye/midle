@@ -1,10 +1,6 @@
 # The mediocre idle client
 
-This is an alternative to swayidle.
-
-### Features
-- multiseat support
-- works
+A simple idle client.
 
 ### Dependencies
 - rust

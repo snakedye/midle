@@ -17,6 +17,7 @@ struct Globals {
 pub struct Config {
     pub name: Option<String>,
     pub command: Option<String>,
+    pub resume_command: Option<String>,
     pub timeout: u32,
 }
 
@@ -25,22 +26,41 @@ impl Config {
         { Config {
             name: None,
             command: None,
+            resume_command: None,
             timeout: 1 << 31
         } }
     }
-    pub fn filter(&self, seat: &Main<WlSeat>, idle_manager: &Main<OrgKdeKwinIdle>) {
+    pub fn filter(self, seat: &Main<WlSeat>, name: String, idle_manager: Option<&Main<OrgKdeKwinIdle>>) {
         let idle_timeout = idle_manager
+            .expect("Compositor doesn\'t implement the idle protocol")
             .get_idle_timeout(seat, self.timeout);
-        if let Some(command) = &self.command {
-            let mut string = command.split_whitespace();
-            let mut command = Command::new(string.next().unwrap());
-            command.args(string.collect::<Vec<&str>>());
+        if {
+            match &self.name {
+                Some(seat_name) => name.eq(seat_name),
+                None => true
+            }
+        } {
             idle_timeout.quick_assign(move |_, event, _| match event {
-                Event::Idle => { command.spawn().expect("Error"); }
-                Event::Resumed => {}
+                Event::Idle => { 
+                    if let Some(value) = &self.command {
+                        run_command(value.clone())
+                    }
+                }
+                Event::Resumed => { 
+                    if let Some(value) = &self.resume_command {
+                        run_command(value.clone())
+                    }
+                }
             });
-        } else { idle_timeout.quick_assign(move |_, _, _| {}) };
+        }
     }
+}
+
+fn run_command(value: String) {
+    let mut string = value.split_whitespace();
+    let mut command = Command::new(string.next().unwrap());
+    command.args(string.collect::<Vec<&str>>());
+    command.spawn().expect("Error");
 }
 
 fn main() {
@@ -57,38 +77,42 @@ fn main() {
 
     let mut configuration: Vec<Config> = Vec::new();
 
+    let mut atom_count = 0;
+    let mut atom = Config::new();
     let mut args = std::env::args();
-    args.next();
-    let mut collect = false;
-    let mut fields = (false, false, false);
     loop {
-        let len = configuration.len();
         match args.next() {
             Some(flag) => match flag.as_str() {
                 "-c" | "--command" => { 
-                    collect = true;
-                    fields = (false, false, false); 
-                    configuration.push(Config::new());
+                    if atom_count > 0 {
+                        configuration.push(atom);
+                        atom = Config::new();
+                    }
+                    if let Some(value) = args.next() {
+                        atom.timeout = value.parse::<u32>().unwrap() * 1000;
+                    }
+                    atom_count += 1;
+                    atom.command = args.next();
+                }
+                "-r" | "--resume" => { 
+                    atom.resume_command = args.next();
+                }
+                "-s" | "--seat-name" => {
+                    atom.name = args.next();
                 }
                 "-h" => { 
                     print!("Usage: midle [option]\n\n");
-                    println!("    -c [timeout] [command] [seat_name] : the timeout is in second");
+                    print!("  -c, --command <timeout> <command>     the timeout is in second\n");
+                    print!("  -r, --resume <command>                resume command, follows a regular command\n");
+                    println!("  -s, --seat_name <seat_name>           the name of the seat associated to a command");
                     std::process::exit(0);
                 }
-                _ => if collect {
-                    if !fields.0 {
-                        fields.0 = true;
-                        configuration[len-1].timeout = flag.parse::<u32>().unwrap() * 1000;
-                    } else if !fields.1 {
-                        fields.1 = true;
-                        configuration[len-1].command = Some(flag);
-                    } else if !fields.2 {
-                        fields.2 = true;
-                        configuration[len-1].command = Some(flag);
-                    }
-                }
+                _ => {} 
             },
-            None => break,
+            None => {
+                configuration.push(atom);
+                break;
+            },
         }
     }
 
@@ -99,6 +123,10 @@ fn main() {
                 WlSeat,
                 7,
                 |seat: Main<WlSeat>, mut globals: DispatchData| {
+                    seat.quick_assign(move |_, event, mut placeholder| match event {
+                        wl_seat::Event::Name{ name } => (*placeholder.get::<String>().unwrap()) = name,
+                        _ => {}
+                    });
                     globals.get::<Globals>().unwrap().seats.push(seat);
                 }
             ],
@@ -117,29 +145,19 @@ fn main() {
         .unwrap();
 
     for seat in globals.seats {
-        let configuration = configuration.clone();
-        seat.quick_assign(move |seat, event, mut idle_manager| match event {
-            wl_seat::Event::Name{ name } => for config in &configuration {
-                if {
-                match config.name.as_ref() {
-                    Some(seat_name) => name.eq(seat_name),
-                    None => true
-                }
-                } {
-                    let idle_manager = idle_manager.get::<Main<OrgKdeKwinIdle>>().unwrap();
-                    config.filter(&seat, &idle_manager);
-                } else {
-                    seat.quick_assign(move |_, _, _| {});
-                }
-            }
-            _ => {}
-        })
+        let mut seat_name = String::new();
+        event_queue
+            .sync_roundtrip(&mut seat_name, |_, _, _| unreachable!())
+            .unwrap();
+        for config in &configuration {
+            config.clone().filter(&seat, seat_name.clone(), globals.idle_manager.as_ref());
+        }
     }
 
-    if let Some(mut idle_manager) = globals.idle_manager {
+    if globals.idle_manager.is_some() {
         loop {
             event_queue
-                .dispatch(&mut idle_manager, |event, object, _| {
+                .dispatch(&mut (), |event, object, _| {
                     panic!(
                         "[callop] Encountered an orphan event: {}@{}: {}",
                         event.interface,
